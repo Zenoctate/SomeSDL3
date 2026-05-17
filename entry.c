@@ -1,17 +1,12 @@
 #include <stdio.h>
 
 #include "defs.h"
+#include "datatype.h"
 #include "Control.h"
 #include "Vector.h"
 #include "Gameplay.h"
 #include "lib/API.h"
-
-#include <SDL3/SDL.h>
-#include <SDL3/SDL_main.h>
-
-extern SDL_Window *main_window;
-extern SDL_Renderer *main_renderer;
-extern SDL_Event main_event;
+#include "lib/math.h"
 
 Vector2D camera = {0};
 Player_Input player_input;
@@ -28,8 +23,8 @@ bool is_running = false;
 double delta_time = 0;                      // Time between game ticks
 double time_passed = 0;                     // Seconds passed since running
 
-void ToOnScreenCoordinate(Vector2D *out, Vector2D *ingame, Vector2D *camera);
 bool LimitPos(Vector2D *vec, int Xmin, int Ymin, int Xmax, int Ymax);
+void removeIndex(void *arr, int element_size, int index, int length);
 
 bool Init_Game();
 bool Init_FirstTick();
@@ -48,13 +43,13 @@ int main(int argc, char* argv[]) {
         unsigned long counter = SDL_GetPerformanceCounter();
 
         Set_Color(0x000000ff);
-        SDL_RenderClear(main_renderer);
+        Clear_Screen();
         
         Game_EHandle();
         Game_Tick();
         Game_Draw();
         
-        SDL_RenderPresent(main_renderer);
+        Present_Screen();
 
         // ################ For Consistent Frame Rate ################
         delta_time = (SDL_GetPerformanceCounter() - counter) / (double)SDL_GetPerformanceFrequency();
@@ -72,24 +67,18 @@ int main(int argc, char* argv[]) {
 }
 
 bool Init_FirstTick() {
-    // PLAYER_CHARACTER->entity_struct.pos.x = 0;
-    // PLAYER_CHARACTER->entity_struct.pos.y = 0;
-    // PLAYER_CHARACTER->entity_struct.vel.y = 0;
-    // PLAYER_CHARACTER->entity_struct.vel.y = 0;
-
-    for(int i = 0; i < 5; i++) {
+    for(int i = 0; i < 7; i++) {
         characters[i] = Spawn_Character();
-        characters[i]->entity_struct.pos.x = i * 25;
-        characters[i]->entity_struct.pos.y = i * 30;
-        characters[i]->health = 100;
+        characters[i]->entity_struct.pos.x = (i * 25) % 400;
+        characters[i]->entity_struct.pos.y = (i * 30) % 400;
         characters[i]->entity_struct.mass = 10;
 
-        characters[i]->entity_struct.square_hitbox_cornerpos.x = -10;
-        characters[i]->entity_struct.square_hitbox_cornerpos.y = -10;
-        characters[i]->entity_struct.hitbox_dimensions.x = 20;
-        characters[i]->entity_struct.hitbox_dimensions.y = 20;
+        characters[i]->entity_struct.square_hitbox_cornerpos.x = 0;
+        characters[i]->entity_struct.square_hitbox_cornerpos.y = 0;
+        characters[i]->entity_struct.hitbox_dimensions.x = 20 + (2*i);
+        characters[i]->entity_struct.hitbox_dimensions.y = 20 + (2*i);
     }
-    num_characters = 5;
+    num_characters = 7;
 
     return true;
 }
@@ -104,22 +93,22 @@ void Game_EHandle() {
             case TYPE_KEYUPEVENT: {
                 Key_MyEvent ke = Get_KeyEvent();
                 switch(ke.keycode) {
-                    case SDL_SCANCODE_ESCAPE: {
+                    case KEY_ESCAPE: {
                         is_running = false;
                     } break;
-                    case SDL_SCANCODE_W: {
+                    case KEY_W: {
                         player_input.up = ke.state;
                     } break;
-                    case SDL_SCANCODE_A: {
+                    case KEY_A: {
                         player_input.left = ke.state;
                     } break;
-                    case SDL_SCANCODE_S: {
+                    case KEY_S: {
                         player_input.down = ke.state;
                     } break;
-                    case SDL_SCANCODE_D: {
+                    case KEY_D: {
                         player_input.right = ke.state;
                     } break;
-                    case SDL_SCANCODE_SPACE: {
+                    case KEY_SPACE: {
                         player_input.fire = ke.state;
                     } break;
                 }
@@ -129,7 +118,7 @@ void Game_EHandle() {
 }
 
 bool Game_Tick() {
-    // PLAYER #######################################
+    // PLAYER HANDLE ################################
     float diag_1byroot2 = 1;
     if((player_input.up || player_input.down) && (player_input.right || player_input.left)) {
         diag_1byroot2 = BYSQRT2;
@@ -138,42 +127,63 @@ bool Game_Tick() {
     PLAYER_CHARACTER->entity_struct.vel.x += (player_input.right - player_input.left) * 5.0f * diag_1byroot2;
     PLAYER_CHARACTER->entity_struct.vel.y += (player_input.up - player_input.down) * 5.0f * diag_1byroot2;
 
-    // if(player_input.fire && PLAYER_CHARACTER.fire_cooldown <= 0) {
-    //     PLAYER_CHARACTER.fire_cooldown = FIRE_COOLDOWN_TIME;
-    //     Fire_Bullet(&bullets[0], PLAYER_CHARACTER, 2.0);
-    //     num_bullets++;
-    // }
-    // // ##############################################
-    
-    // Character_Tick(characters[0], delta_time);
+    if(player_input.fire && PLAYER_CHARACTER->fire_cooldown <= 0) {
+        PLAYER_CHARACTER->fire_cooldown = FIRE_COOLDOWN_TIME;
+        Fire_Bullet(&bullets[0], PLAYER_CHARACTER, 2.0);
+        Fire_Bullet(&bullets[1], characters[1], 5.0);
+        num_bullets = 2;
+    }
+    // ##############################################
+
+    // CHARACTERS ##################################
     for(int i = 0; i < num_characters; i++) {
         Character_Tick(characters[i], delta_time);
 
-        if(characters[i]->entity_struct.pos.x > (PLAYABLE_WIDTH / 2) - 10) {
-            characters[i]->entity_struct.vel.x = -SDL_fabs(characters[i]->entity_struct.vel.x) * 0.8;
-        } else if(characters[i]->entity_struct.pos.x < (-PLAYABLE_WIDTH / 2) + 10) {
-            characters[i]->entity_struct.vel.x = SDL_fabs(characters[i]->entity_struct.vel.x) * 0.8;
+        if(characters[i]->entity_struct.pos.x
+            > (PLAYABLE_WIDTH / 2) - characters[i]->entity_struct.square_hitbox_cornerpos.x - characters[i]->entity_struct.hitbox_dimensions.x) {
+            characters[i]->entity_struct.pos.x = (PLAYABLE_WIDTH / 2) - characters[i]->entity_struct.square_hitbox_cornerpos.x - characters[i]->entity_struct.hitbox_dimensions.x;
+            characters[i]->entity_struct.vel.x = math_absf(characters[i]->entity_struct.vel.x) * -0.8;
+        } else if(characters[i]->entity_struct.pos.x
+            < -(PLAYABLE_WIDTH / 2) - characters[i]->entity_struct.square_hitbox_cornerpos.x) {
+            characters[i]->entity_struct.pos.x = -(PLAYABLE_WIDTH / 2) - characters[i]->entity_struct.square_hitbox_cornerpos.x;
+            characters[i]->entity_struct.vel.x = math_absf(characters[i]->entity_struct.vel.x) * 0.8;
+        }
+
+        if(characters[i]->entity_struct.pos.y
+            > (PLAYABLE_HEIGHT / 2) - characters[i]->entity_struct.square_hitbox_cornerpos.y - characters[i]->entity_struct.hitbox_dimensions.y) {
+            characters[i]->entity_struct.pos.y = (PLAYABLE_HEIGHT / 2) - characters[i]->entity_struct.square_hitbox_cornerpos.y - characters[i]->entity_struct.hitbox_dimensions.y;
+            characters[i]->entity_struct.vel.y = math_absf(characters[i]->entity_struct.vel.y) * -0.8;
+        } else if(characters[i]->entity_struct.pos.y
+            < -(PLAYABLE_HEIGHT / 2) - characters[i]->entity_struct.square_hitbox_cornerpos.y) {
+            characters[i]->entity_struct.pos.y = -(PLAYABLE_HEIGHT / 2) - characters[i]->entity_struct.square_hitbox_cornerpos.y;
+            characters[i]->entity_struct.vel.y = math_absf(characters[i]->entity_struct.vel.y) * 0.8;
         }
         
-        if(characters[i]->entity_struct.pos.y > (PLAYABLE_HEIGHT / 2) - 10) {
-            characters[i]->entity_struct.vel.y = -SDL_fabs(characters[i]->entity_struct.vel.y) * 0.8;
-        } else if(characters[i]->entity_struct.pos.y < (-PLAYABLE_HEIGHT / 2) + 10) {
-            characters[i]->entity_struct.vel.y = SDL_fabs(characters[i]->entity_struct.vel.y) * 0.8;
-        }
-        LimitPos(&characters[i]->entity_struct.pos, (-PLAYABLE_WIDTH / 2) + 10, (-PLAYABLE_HEIGHT / 2) + 10, (PLAYABLE_WIDTH / 2) - 10, (PLAYABLE_HEIGHT / 2) - 10);
-
         for(int j = i + 1; j < num_characters; j++) {
-            Translational_Collision(&characters[i]->entity_struct, &characters[j]->entity_struct);
+            if(Translational_Collision(&characters[i]->entity_struct, &characters[j]->entity_struct)) {
+                // Nothing here
+            }
         }
     }
+    // ##############################################
 
-    // for(int i = 0; i < num_bullets; i++) {
-    //     if(LimitPos(&bullets[i].entity_struct.pos, (-PLAYABLE_WIDTH / 2) + 10, (-PLAYABLE_HEIGHT / 2) - 10, (PLAYABLE_WIDTH / 2) - 10, (PLAYABLE_HEIGHT / 2) - 10)) {
-    //         bullets[i].time_alive = -1;
-    //     } else if(bullets[i].time_alive > 0) {
-    //         Bullet_Tick(&bullets[i], delta_time);
-    //     }
-    // }
+    // BULLETS ######################################
+    for(int i = 0; i < num_bullets; i++) {
+        if(bullets[i]->time_alive > 0) {
+            Bullet_Tick(bullets[i], delta_time);
+            // for(int j = 0; j < num_characters; j++) {
+                
+            // }
+        } else {
+            // printf("%d\n", i);
+            // printf("%p\n", bullets[i]);
+            // removeIndex((void *)&bullets, sizeof(Bullet *), i, num_bullets);
+            // printf("%p\n", bullets[i]);
+            // i--;
+            // num_bullets--;
+        }
+    }
+    // ##############################################
 
     LimitPos(&camera, PLAYER_CHARACTER->entity_struct.pos.x - 100, PLAYER_CHARACTER->entity_struct.pos.y - 100, PLAYER_CHARACTER->entity_struct.pos.x + 100, PLAYER_CHARACTER->entity_struct.pos.y + 100);
 
@@ -181,33 +191,27 @@ bool Game_Tick() {
 }
 
 bool Game_Draw() {
-    Vector2D onScreen, tmpvec;
-    SDL_FRect rect;
+    // BULLETS ######################################
+    for(int i = 0; i < num_bullets; i++) {
+        if(bullets[i]->time_alive > 0 || true) {
+            Bullet_Draw(bullets[i], &camera);
+        }
+    }
+    // ##############################################
 
-    // // BULLETS ######################################
-    // for(int i = 0; i < 1; i++) {
-    //     if(bullets[i].time_alive > 0) {
-    //         Bullet_Draw(main_renderer, bullets[i], &camera);
-    //     }
-    // }
-    // // ##############################################
-    
-    // // ENTITES ######################################
+    // CHARACTERS ###################################
     for(int i = 0; i < num_characters; i++) {
         Character_Draw(characters[i], &camera);
     }
-    // // ##############################################
+    // ##############################################
 
     // PLAY BORDER ##################################
-    tmpvec.x = (-PLAYABLE_WIDTH / 2);
-    tmpvec.y = (PLAYABLE_HEIGHT / 2);
-    ToOnScreenCoordinate(&onScreen, &tmpvec, &camera);
-    rect.x = onScreen.x + 0.5;
-    rect.y = onScreen.y + 0.5;
-    rect.w = PLAYABLE_WIDTH;
-    rect.h = PLAYABLE_HEIGHT;
-    Set_Color(0xffffffff);
-    SDL_RenderRect(main_renderer, &rect);
+    Vector2D tmp, onScreen;
+    tmp.x = -(PLAYABLE_WIDTH / 2);
+    tmp.y = -(PLAYABLE_HEIGHT / 2);
+    ToOnScreenCoordinate(&onScreen, &tmp, &camera);
+    Set_Color(0x444444ff);
+    Draw_Rect(onScreen.x, onScreen.y, PLAYABLE_WIDTH, PLAYABLE_HEIGHT);
     // ##############################################
 
     return true;
@@ -215,14 +219,11 @@ bool Game_Draw() {
 
 void Free_Game() {
     for(int i = 0; i < num_characters; i++) {
-        Despawn_Character(characters[i]);
-        characters[i] = 0;
+        Despawn_Character(&characters[i]);
     }
-}
-
-void ToOnScreenCoordinate(Vector2D *out, Vector2D *ingame, Vector2D *camera) {
-    out->x = ingame->x - camera->x + (INIT_WIDTH / 2);
-    out->y = -ingame->y + camera->y + (INIT_HEIGHT / 2);
+    for(int i = 0; i < num_bullets; i++) {
+        Despawn_Bullet(&bullets[i]);
+    }
 }
 
 bool LimitPos(Vector2D *vec, int Xmin, int Ymin, int Xmax, int Ymax) {
@@ -244,4 +245,26 @@ bool LimitPos(Vector2D *vec, int Xmin, int Ymin, int Xmax, int Ymax) {
     }
 
     return did_limit;
+}
+
+bool LimitPlayArea(Entity *e, int Xmin, int Ymin, int Xmax, int Ymax) {
+    bool did_limit = false;
+
+    
+
+    return did_limit;
+}
+
+void removeIndex(void *arr, int element_size, int index, int length) {
+    if(index > length - 1) {
+        return;
+    }
+
+    for(int i = index; i < length; i++) {
+        void *tmp = arr + element_size;
+        *(long*)tmp = *(long*)arr;
+        arr = tmp;
+    }
+
+    *(long*)arr = 0;    
 }

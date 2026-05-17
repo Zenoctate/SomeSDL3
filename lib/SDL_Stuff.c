@@ -1,4 +1,5 @@
 #include "lib/API.h"
+#include "defs.h"
 
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
@@ -7,6 +8,8 @@
 SDL_Window *main_window;
 SDL_Renderer *main_renderer;
 SDL_Event main_event;
+
+SDL_FRect rect; // For no unneccessary stack allocation
 
 bool Initialize_Game() {
     if(!SDL_Init(SDL_INIT_VIDEO)) {
@@ -33,13 +36,28 @@ bool Set_Color(int hexcode) {
              hexcode & 0xff);
 }
 
-bool Draw_Rect(int x, int y, int w, int h) {
-    static SDL_FRect rect; // For no unneccessary stack allocation
+bool Draw_FillRect(int x, int y, int w, int h) {
     rect.x = x;
-    rect.y = y;
+    rect.y = -y + INIT_HEIGHT;
     rect.w = w;
-    rect.h = h;
+    rect.h = -h;
     return SDL_RenderFillRect(main_renderer, &rect);
+}
+
+
+bool Draw_Rect(int x, int y, int w, int h) {
+    rect.x = x;
+    rect.y = -y + INIT_HEIGHT;
+    rect.w = w;
+    rect.h = -h;
+    return SDL_RenderRect(main_renderer, &rect);
+}
+
+bool Clear_Screen() {
+    return SDL_RenderClear(main_renderer);
+}
+bool Present_Screen() {
+    return SDL_RenderPresent(main_renderer);
 }
 
 void Destroy_Game() {

@@ -1,5 +1,6 @@
 #include "Gameplay.h"
 #include "lib/API.h"
+#include "defs.h"
 #include <stdlib.h>
 
 void Entity_Tick(Entity *entity, double delta_time) {
@@ -8,20 +9,8 @@ void Entity_Tick(Entity *entity, double delta_time) {
 }
 
 void Character_Tick(Character *character, double delta_time) {
-    if(character->health > 0 || 1) {
-        Entity_Tick(&character->entity_struct, delta_time);
-        character->fire_cooldown -= delta_time;
-    }
-}
-
-void Character_Draw(Character *character,  Vector2D *camera) {
-    Set_Color(0x00ffffff);
-    Draw_Rect(
-        character->entity_struct.pos.x - camera->x + (INIT_WIDTH / 2) - 9.5,
-        -character->entity_struct.pos.y + camera->y + (INIT_HEIGHT / 2) - 9.5,
-        20,
-        20
-    );
+    Entity_Tick(&character->entity_struct, delta_time);
+    character->fire_cooldown -= delta_time;
 }
 
 void Bullet_Tick(Bullet *bullet, double delta_time) {
@@ -29,21 +18,37 @@ void Bullet_Tick(Bullet *bullet, double delta_time) {
     bullet->time_alive -= delta_time;
 }
 
+void Character_Draw(Character *character,  Vector2D *camera) {
+    Vector2D onScreen;
+    Vector2D tmp = character->entity_struct.pos;
+    AddVector(&tmp, &character->entity_struct.square_hitbox_cornerpos);
+    ToOnScreenCoordinate(&onScreen, &tmp, camera);
+    
+    Set_Color(0x00ffffff);
+    Draw_FillRect(onScreen.x, onScreen.y, character->entity_struct.hitbox_dimensions.x, character->entity_struct.hitbox_dimensions.y);
+}
+
 void Bullet_Draw(Bullet *bullet, Vector2D *camera) {
-    Set_Color(0xffff55ff);
-    Draw_Rect(
-        bullet->entity_struct.pos.x - camera->x + (INIT_WIDTH / 2) - 9.5,
-        -bullet->entity_struct.pos.y + camera->y + (INIT_HEIGHT / 2) - 9.5,
-        2,
-        2
-    );
+    Vector2D onScreen;
+    Vector2D tmp = bullet->entity_struct.pos;
+    AddVector(&tmp, &bullet->entity_struct.square_hitbox_cornerpos);
+    ToOnScreenCoordinate(&onScreen, &tmp, camera);
+    
+    Set_Color(0xff0000ff);
+    Draw_FillRect(onScreen.x, onScreen.y, bullet->entity_struct.hitbox_dimensions.x, bullet->entity_struct.hitbox_dimensions.y);
+    Set_Color(0x000000ff);
+    Draw_FillRect(onScreen.x + BULLET_THICKNESS, onScreen.y + BULLET_THICKNESS, bullet->entity_struct.hitbox_dimensions.x - (2*BULLET_THICKNESS), bullet->entity_struct.hitbox_dimensions.y - (2*BULLET_THICKNESS));
 }
 
 void Fire_Bullet(Bullet **bullet, Character *by_character, double time_alive) {
     (*bullet) = Spawn_Bullet();
     (*bullet)->entity_struct.pos = by_character->entity_struct.pos;
-    (*bullet)->entity_struct.vel = by_character->entity_struct.vel;
+    (*bullet)->entity_struct.vel.x = by_character->entity_struct.vel.x * 1.1;
+    (*bullet)->entity_struct.vel.y = by_character->entity_struct.vel.y * 1.1;
+    (*bullet)->entity_struct.square_hitbox_cornerpos = by_character->entity_struct.square_hitbox_cornerpos;
+    (*bullet)->entity_struct.hitbox_dimensions = by_character->entity_struct.hitbox_dimensions;
     (*bullet)->time_alive = time_alive;
+    (*bullet)->damage = 20;
     (*bullet)->spawned_by = by_character;
 }
 
@@ -60,8 +65,27 @@ bool Check_Collision(Entity *e1, Entity *e2) {
     double e2y1 = e2->square_hitbox_cornerpos.y + e2->pos.y;
     double e2y2 = e2->square_hitbox_cornerpos.y + e2->pos.y + e2->hitbox_dimensions.y;
 
-    if(((e1x1 <= e2x1 && e1x2 >= e2x1) || (e1x1 <= e2x2 && e1x2 >= e2x2))
-    && ((e1y1 <= e2y1 && e1y2 >= e2y1) || (e1y1 <= e2y2 && e1y2 >= e2y2))) {
+    if(
+        (
+            (
+                (e1x1 <= e2x1 && e1x2 >= e2x1) || (e1x1 <= e2x2 && e1x2 >= e2x2)
+            )
+            &&
+            (
+                (e1y1 <= e2y1 && e1y2 >= e2y1) || (e1y1 <= e2y2 && e1y2 >= e2y2)
+            )
+        )
+        ||
+        (
+            (
+                (e2x1 <= e1x1 && e2x2 >= e1x1) || (e2x1 <= e1x2 && e2x2 >= e1x2)
+            )
+            &&
+            (
+                (e2y1 <= e1y1 && e2y2 >= e1y1) || (e2y1 <= e1y2 && e2y2 >= e1y2)
+            )
+        )
+    ) {
         return true;
     }
 
@@ -71,48 +95,46 @@ bool Check_Collision(Entity *e1, Entity *e2) {
 // Elastic Collision Only
 bool Translational_Collision(Entity *to, Entity *from) {
     if(Check_Collision(to, from)) {
-        double angle = SDL_atan2(to->pos.y - from->pos.y, to->pos.x - from->pos.x);
-    
-        double tmpx = from->square_hitbox_cornerpos.x + from->hitbox_dimensions.x
-            + to->square_hitbox_cornerpos.x + to->hitbox_dimensions.x;
-        double tmpy = from->square_hitbox_cornerpos.y + from->hitbox_dimensions.y
-            + to->square_hitbox_cornerpos.y + to->hitbox_dimensions.y;
-
+        Vector2D distance;
+        distance.x = to->pos.x - from->pos.x;
+        distance.y = to->pos.y - from->pos.y;
+        
         double mass_sum = to->mass + from->mass;
         double diff_to_from_mass = to->mass - from->mass;
 
-        #define VERTICAL 1
-        #define HORIZONTAL 2
-        int collision_axis = 0;
-
-        if(angle >= DEGTORAD * -45 && angle <= DEGTORAD * 45) {
-            to->pos.x = from->pos.x + (tmpx + 0.05);
-            from->pos.x = to->pos.x - (tmpx + 0.1);
-            collision_axis = HORIZONTAL;
-        } else if(angle > DEGTORAD * 45 && angle < DEGTORAD * 135) {
-            to->pos.y = from->pos.y + (tmpy + 0.05);
-            from->pos.y = to->pos.y - (tmpy + 0.1);
-           collision_axis = VERTICAL;
-        } else if(angle >= DEGTORAD * 135 || angle <= DEGTORAD * -135) {
-            to->pos.x = from->pos.x - (tmpx + 0.05);
-            from->pos.x = to->pos.x + (tmpx + 0.1);
-            collision_axis = HORIZONTAL;
-        } else if(angle > DEGTORAD * -135 && angle < DEGTORAD * -45) {
-            to->pos.y = from->pos.y - (tmpy + 0.05);
-            from->pos.y = to->pos.y + (tmpy + 0.1);
-            collision_axis = VERTICAL;
+        double slope = distance.y / distance.x;
+        if(slope < 0) {
+            slope *= -1;
         }
 
-        if(collision_axis == HORIZONTAL) {
+        if(slope <= 1) {
+            if(distance.x > 0) {
+                to->pos.x = from->pos.x + from->square_hitbox_cornerpos.x + from->hitbox_dimensions.x - to->square_hitbox_cornerpos.x + 0;
+                from->pos.x = to->pos.x + to->square_hitbox_cornerpos.x - from->hitbox_dimensions.x - from->square_hitbox_cornerpos.x - 0;
+            } 
+            else if(distance.x < 0) {
+                to->pos.x = from->pos.x + from->square_hitbox_cornerpos.x - to->square_hitbox_cornerpos.x - to->hitbox_dimensions.x - 0;
+                from->pos.x = to->pos.x + to->square_hitbox_cornerpos.x + to->hitbox_dimensions.x - from->square_hitbox_cornerpos.x + 0;
+            }
+
             double initial_to_velx = to->vel.x;
             to->vel.x = ((to->vel.x * diff_to_from_mass) + (2 * from->mass * from->vel.x)) / mass_sum;
             from->vel.x = ((from->vel.x * -diff_to_from_mass) + (2 * to->mass * initial_to_velx)) / mass_sum;
-        } else if(collision_axis == VERTICAL) {
+        } else if(slope > 1) {
+            if(distance.y > 0) {
+                to->pos.y = from->pos.y + from->square_hitbox_cornerpos.y + from->hitbox_dimensions.y - to->square_hitbox_cornerpos.y + 0;
+                from->pos.y = to->pos.y + to->square_hitbox_cornerpos.y - from->hitbox_dimensions.y - from->square_hitbox_cornerpos.y - 0;
+            } 
+            else if(distance.y < 0) {
+                to->pos.y = from->pos.y + from->square_hitbox_cornerpos.y - to->square_hitbox_cornerpos.y - to->hitbox_dimensions.y - 0;
+                from->pos.y = to->pos.y + to->square_hitbox_cornerpos.y + to->hitbox_dimensions.y - from->square_hitbox_cornerpos.y + 0;
+            }
+
             double initial_to_vely = to->vel.y;
             to->vel.y = ((to->vel.y * diff_to_from_mass) + (2 * from->mass * from->vel.y)) / mass_sum;
             from->vel.y = ((from->vel.y * -diff_to_from_mass) + (2 * to->mass * initial_to_vely)) / mass_sum;
         }
-
+        
         return true;
     }
     return false;
@@ -126,19 +148,17 @@ Bullet *Spawn_Bullet() {
     return (Bullet *)malloc(sizeof(Bullet));
 }
 
-StaticObj *Spawn_StaticObj() {
-    return (StaticObj *)malloc(sizeof(StaticObj));
+bool Despawn_Character(Character **character) {
+    free(*character);
+    *character = 0;
 }
 
-bool Despawn_Character(Character *character) {
-    free(character);
+bool Despawn_Bullet(Bullet **bullet) {
+    free(*bullet);
+    *bullet = 0;
 }
 
-bool Despawn_Bullet(Bullet *bullet) {
-    free(bullet);
+void ToOnScreenCoordinate(Vector2D *out, Vector2D *ingame, Vector2D *camera) {
+    out->x = ingame->x - camera->x + (INIT_WIDTH / 2);
+    out->y = ingame->y - camera->y + (INIT_HEIGHT / 2);
 }
-
-bool Despawn_StaticObj(StaticObj *staticobj) {
-    free(staticobj);
-}
-

@@ -6,6 +6,8 @@
 #define INIT_HEIGHT 1000
 #define INIT_BACKCOLOR 0x000000ff
 
+#define BULLET_THICKNESS 3
+
 #define DO_FRAME_DELTA 0.008                // For consistent frame rate (set 0 to remove function)
 
 #define SQRT2 1.4142135623730951
