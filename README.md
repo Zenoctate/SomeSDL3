@@ -25,11 +25,9 @@ Player shoots bullets to opponents
 #### Directory `src/` & `include/`:
 - `include/def.h` -> A defintion file containing constants to use
 - `Vector` -> *~~TO FILL~~*
-- `Entity` -> *~~TO FILL~~*
 - `Control` -> *~~TO FILL~~*
-- `Collisions` -> *~~TO FILL~~*
 - `Gameplay` -> *~~TO FILL~~*
 
 #### Other files not in repo:
 - `vendored/` -> `SDL3` and its `satellite libraries` source code is placed here after running `sh setup.sh`
-- `build/` -> Self explainatory
+- `build/` ->Build folder

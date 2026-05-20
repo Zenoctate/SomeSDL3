@@ -1,8 +1,8 @@
 #ifndef CONTROL
 #define CONTROL
 
-#include <stdbool.h>
 #include "Vector.h"
+#include <stdbool.h>
 
 typedef struct {
     bool up;

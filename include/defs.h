@@ -24,4 +24,6 @@
 
 #define FIRE_COOLDOWN_TIME 0.2      // In seconds, min time required between consecutive bullet fire
 
+#define byte char
+
 #endif
