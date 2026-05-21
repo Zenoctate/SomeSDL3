@@ -24,11 +24,12 @@ void Character_Draw(SDL_Renderer *renderer, Character *character,  Vector2D *cam
     AddVector(&tmp, &character->entity_struct.square_hitbox_cornerpos);
     ToOnScreenCoordinate(&onScreen, &tmp, camera);
     
-    SDL_SetRenderDrawColor(renderer, 0, 255, 255, 255);
+    SDL_FRect rect;
     rect.x = onScreen.x;
     rect.y = -onScreen.y + INIT_HEIGHT;
     rect.w = character->entity_struct.hitbox_dimensions.x;
     rect.h = -character->entity_struct.hitbox_dimensions.y;
+    SDL_SetRenderDrawColor(renderer, 0, 255, 255, 255);
     SDL_RenderFillRect(renderer, &rect);
 }
 
@@ -38,6 +39,9 @@ void Bullet_Draw(SDL_Renderer *renderer, Bullet *bullet, Vector2D *camera) {
     AddVector(&tmp, &bullet->entity_struct.square_hitbox_cornerpos);
     ToOnScreenCoordinate(&onScreen, &tmp, camera);
     
+    SDL_FRect rect;
+
+    // Outer Rect
     rect.x = onScreen.x;
     rect.y = -onScreen.y + INIT_HEIGHT;
     rect.w = bullet->entity_struct.hitbox_dimensions.x;
@@ -45,11 +49,12 @@ void Bullet_Draw(SDL_Renderer *renderer, Bullet *bullet, Vector2D *camera) {
     SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
     SDL_RenderFillRect(renderer, &rect);
     
+    // Inner rect (for hollow)
     rect.x = onScreen.x + BULLET_THICKNESS;
     rect.y = -(onScreen.y + BULLET_THICKNESS) + INIT_HEIGHT;
     rect.w = bullet->entity_struct.hitbox_dimensions.x - (2*BULLET_THICKNESS);
     rect.h = -(bullet->entity_struct.hitbox_dimensions.y - (2*BULLET_THICKNESS));
-    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+    SDL_SetRenderDrawColor(renderer, INIT_BACKCOLOR);
     SDL_RenderFillRect(renderer, &rect);
 }
 
