@@ -4,7 +4,7 @@
 #define MAIN_TITLE "SDL Game"
 #define INIT_WIDTH 1000
 #define INIT_HEIGHT 1000
-#define INIT_BACKCOLOR 0, 0, 0, 255
+#define INIT_BACKCOLOR 0, 0, 0, 0
 #define DO_FRAME_DELTA 0.008                // For consistent frame rate (set 0 to remove function)
 
 

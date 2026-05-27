@@ -26,6 +26,7 @@ typedef struct {
     Character_Type type;
     
     double fire_cooldown;            // Time left it can fire bullet again in seconds
+    double damage_cooldown;          // Time left for no damage
 } Character;
 
 typedef struct {
@@ -47,7 +48,7 @@ void Bullet_Draw(SDL_Renderer *renderer, Bullet *bullet,  Vector2D *camera);
 
 // Between ENTITIES
 bool Check_Collision(Entity *e1, Entity *e2);
-bool Translational_Collision(Entity *to, Entity *from);
+bool Translational_SquareOnly_Collision(Entity *to, Entity *from);
 
 void Fire_Bullet(Bullet *bullet, Character *by_character, double time_alive);
 void ToOnScreenCoordinate(Vector2D *out, Vector2D *ingame, Vector2D *camera);

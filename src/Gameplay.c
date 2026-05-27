@@ -11,6 +11,7 @@ void Entity_Tick(Entity *entity, double delta_time) {
 void Character_Tick(Character *character, double delta_time) {
     Entity_Tick(&character->entity_struct, delta_time);
     character->fire_cooldown -= delta_time;
+    character->damage_cooldown -= delta_time;
 }
 
 void Bullet_Tick(Bullet *bullet, double delta_time) {
@@ -107,26 +108,51 @@ bool Check_Collision(Entity *e1, Entity *e2) {
     }
 
     return false;
-    // return e1x1 < e2x2 && e1x2 > e2x1 &&
-    //     e1y2 < e2y1 && e1y1 > e2y2;
 }
 
 // Elastic Collision Only
-bool Translational_Collision(Entity *e1, Entity *e2) {
-    // TODO: detect line intersection based collision
-    if(Check_Collision(e1, e2)) {
-        double e1x1 = e1->square_hitbox_cornerpos.x + e1->pos.x;
-        double e1x2 = e1->square_hitbox_cornerpos.x + e1->pos.x + e1->hitbox_dimensions.x;
+bool Translational_SquareOnly_Collision(Entity *to, Entity *from) {
+    if(Check_Collision(to, from)) {
+        Vector2D distance;
+        distance.x = to->pos.x - from->pos.x;
+        distance.y = to->pos.y - from->pos.y;
         
-        double e1y1 = e1->square_hitbox_cornerpos.y + e1->pos.y;
-        double e1y2 = e1->square_hitbox_cornerpos.y + e1->pos.y + e1->hitbox_dimensions.y;
+        double mass_sum = to->mass + from->mass;
+        double diff_to_from_mass = to->mass - from->mass;
 
-        double e2x1 = e2->square_hitbox_cornerpos.x + e2->pos.x;
-        double e2x2 = e2->square_hitbox_cornerpos.x + e2->pos.x + e2->hitbox_dimensions.x;
+        double slope = distance.y / distance.x;
+        if(slope < 0) { // Can only work if hitbox is sqaure
+            slope *= -1;
+        }
 
-        double e2y1 = e2->square_hitbox_cornerpos.y + e2->pos.y;
-        double e2y2 = e2->square_hitbox_cornerpos.y + e2->pos.y + e2->hitbox_dimensions.y;
+        if(slope <= 1) {
+            if(distance.x > 0) {
+                to->pos.x = from->pos.x + from->square_hitbox_cornerpos.x + from->hitbox_dimensions.x - to->square_hitbox_cornerpos.x + 0;
+                from->pos.x = to->pos.x + to->square_hitbox_cornerpos.x - from->hitbox_dimensions.x - from->square_hitbox_cornerpos.x - 0;
+            } 
+            else if(distance.x < 0) {
+                to->pos.x = from->pos.x + from->square_hitbox_cornerpos.x - to->square_hitbox_cornerpos.x - to->hitbox_dimensions.x - 0;
+                from->pos.x = to->pos.x + to->square_hitbox_cornerpos.x + to->hitbox_dimensions.x - from->square_hitbox_cornerpos.x + 0;
+            }
 
+            double initial_to_velx = to->vel.x;
+            to->vel.x = ((to->vel.x * diff_to_from_mass) + (2 * from->mass * from->vel.x)) / mass_sum;
+            from->vel.x = ((from->vel.x * -diff_to_from_mass) + (2 * to->mass * initial_to_velx)) / mass_sum;
+        } else if(slope > 1) {
+            if(distance.y > 0) {
+                to->pos.y = from->pos.y + from->square_hitbox_cornerpos.y + from->hitbox_dimensions.y - to->square_hitbox_cornerpos.y + 0;
+                from->pos.y = to->pos.y + to->square_hitbox_cornerpos.y - from->hitbox_dimensions.y - from->square_hitbox_cornerpos.y - 0;
+            } 
+            else if(distance.y < 0) {
+                to->pos.y = from->pos.y + from->square_hitbox_cornerpos.y - to->square_hitbox_cornerpos.y - to->hitbox_dimensions.y - 0;
+                from->pos.y = to->pos.y + to->square_hitbox_cornerpos.y + to->hitbox_dimensions.y - from->square_hitbox_cornerpos.y + 0;
+            }
+
+            double initial_to_vely = to->vel.y;
+            to->vel.y = ((to->vel.y * diff_to_from_mass) + (2 * from->mass * from->vel.y)) / mass_sum;
+            from->vel.y = ((from->vel.y * -diff_to_from_mass) + (2 * to->mass * initial_to_vely)) / mass_sum;
+        }
+        
         return true;
     }
     return false;
