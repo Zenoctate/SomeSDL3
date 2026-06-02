@@ -2,14 +2,18 @@
 #include "Control.h"
 #include "Vector.h"
 #include "Gameplay.h"
+#include "User_Interface.h"
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
+#include <SDL3_ttf/SDL_ttf.h>
 
 
 SDL_Window *main_window;
 SDL_Renderer *main_renderer;
 SDL_Event main_event;
+TTF_Font *main_font;
 
+SDL_Texture *start_text;
 
 Vector2D camera = {0};
 Player_Input player_input;
@@ -33,22 +37,36 @@ void reset_Game();
 void Event_Handle();                        // Event handling (Inputs mostly)
 
 int main(int argc, char **argv) {
-    // INITIALIZE SDL ############################################
+    // INITIALIZE ################################################
     if(!SDL_Init(SDL_INIT_VIDEO)) {
+        SDL_Log("Error in init SDL3: %s\n", SDL_GetError());
+        return 1;
+    }
+    
+    if(!TTF_Init()) {
+        SDL_Log("Error in init SDL3_ttf: %s\n", SDL_GetError());
         return 1;
     }
     
     if(!(main_window = SDL_CreateWindow(MAIN_TITLE, INIT_WIDTH, INIT_HEIGHT, 0))) {
+        SDL_Log("Error in init window creation: %s\n", SDL_GetError());
         return 1;
     }
     
     if(!(main_renderer = SDL_CreateRenderer(main_window, 0))) {
+        SDL_Log("Error in init renderer creation: %s\n", SDL_GetError());
         return 1;
     }
+
+    if(!(main_font = TTF_OpenFont("Roboto-Medium.ttf", 25.0f))) {
+        SDL_Log("Error in opening font: %s\n", SDL_GetError());
+        return 1;
+    }
+
+    start_text = Bake_Text_To_Texture(main_renderer, main_font, "Press SPACE to start", (SDL_Color){255, 255, 255, 255});
     // ###########################################################
     
     reset_Game(); // Setup Game
-    
     is_running = true;
     while(is_running) { // Game Loop
         unsigned long counter = SDL_GetPerformanceCounter();
@@ -74,7 +92,7 @@ int main(int argc, char **argv) {
                 num_bullets = 2;
             }
         } else {
-            // TODO: Menu screen show
+            Render_Text_Texture(main_renderer, start_text, (Vector2D){100, 100});
             if(player_input.fire) {
                 player_dead = false;
                 reset_Game();
@@ -172,7 +190,6 @@ int main(int argc, char **argv) {
         }
         // ##############################################
 
-
         // DRAW PLAY BORDER #############################
         SDL_FRect rect;
         Vector2D tmp, onScreen;
@@ -199,9 +216,12 @@ int main(int argc, char **argv) {
         // ###########################################################
     }
 
+    SDL_DestroyTexture(start_text);
+    TTF_CloseFont(main_font);
     SDL_DestroyRenderer(main_renderer);
     SDL_DestroyWindow(main_window);
-    
+
+    TTF_Quit();
     SDL_Quit();
     return 0;
 }
@@ -318,23 +338,3 @@ bool LimitToPlayArea(Entity *e, int Xmin, int Ymin, int Xmax, int Ymax) {
 
     return did_limit;
 }
-
-// void removeIndex(void *arr, int element_size, int index, int length) {
-//     if(index > length - 1) {
-//         return;
-//     }
-
-//     // for(int i = index; i < length - 1; i++) {
-//     //     void *tmp = arr + element_size;
-//     //     for(int j = 0; j < element_size; j++) {
-//     //         *(byte*)tmp = *(byte*)arr;
-//     //         tmp++;
-//     //         arr++;
-//     //     }
-//     // }
-
-//     // for(int j = 0; j < element_size; j++) {
-//     //     *(byte*)arr = 0;
-//     //     arr++;
-//     // }
-// }
