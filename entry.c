@@ -6,6 +6,7 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
 #include <SDL3_ttf/SDL_ttf.h>
+#include <stdio.h>
 
 
 SDL_Window *main_window;
@@ -27,7 +28,8 @@ Bullet bullets[BULLET_LIMIT] = {0};         int num_bullets = 0;
 bool is_running = false;
 bool player_dead = true;
 double delta_time = 0;                      // Time between game ticks
-double time_passed = 0;                     // Seconds passed since running
+double time_passed = 0;                     // Seconds passed since start
+int score = 0;
 
 
 bool LimitPos(Vector2D *vec, int Xmin, int Ymin, int Xmax, int Ymax);
@@ -124,6 +126,10 @@ int main(int argc, char **argv) {
 
                             characters[j].entity_struct.mass = (characters[j].entity_struct.hitbox_dimensions.x / 4) + 5;
                             bullets[i].spawned_by->entity_struct.mass = (bullets[i].spawned_by->entity_struct.hitbox_dimensions.x / 4) + 5;
+
+                            if(bullets[i].spawned_by == &PLAYER_CHARACTER && !player_dead) {
+                                score += 10;
+                            }
                         }
                     }
                 }
@@ -152,11 +158,7 @@ int main(int argc, char **argv) {
             Character_Tick(&characters[i], delta_time);
             LimitToPlayArea(&characters[i].entity_struct, -(PLAYABLE_WIDTH / 2), -(PLAYABLE_HEIGHT / 2), (PLAYABLE_WIDTH / 2), (PLAYABLE_HEIGHT / 2));
             
-            if(!player_dead) {
-                LimitPos(&camera, PLAYER_CHARACTER.entity_struct.pos.x - 100, PLAYER_CHARACTER.entity_struct.pos.y - 100, PLAYER_CHARACTER.entity_struct.pos.x + 100, PLAYER_CHARACTER.entity_struct.pos.y + 100);
-            }
-
-            // Remove character
+            // Check to remove character
             if(characters[i].entity_struct.hitbox_dimensions.x < 1 || characters[i].entity_struct.hitbox_dimensions.y < 1) {
                 if(i == 0 && !player_dead) { // Player character
                     player_dead = true;
@@ -188,6 +190,11 @@ int main(int argc, char **argv) {
 
             Character_Draw(main_renderer, &characters[i], &camera);
         }
+
+        if(!player_dead) {
+            LimitPos(&camera, PLAYER_CHARACTER.entity_struct.pos.x - 100, PLAYER_CHARACTER.entity_struct.pos.y - 100, PLAYER_CHARACTER.entity_struct.pos.x + 100, PLAYER_CHARACTER.entity_struct.pos.y + 100);
+        }
+
         // ##############################################
 
         // DRAW PLAY BORDER #############################
@@ -203,7 +210,19 @@ int main(int argc, char **argv) {
         SDL_SetRenderDrawColor(main_renderer, 0x44, 0x44, 0x44, 0xff);
         SDL_RenderRect(main_renderer, &rect);
         // ##############################################
+ 
+        // INFO UI ######################################
+        char str[100];
+
+        sprintf(str, "Time: %d s", (int)time_passed);
+        SDL_Texture* tmpture = Bake_Text_To_Texture(main_renderer, main_font, str, (SDL_Color){255, 255, 255, 255});
+        Render_Text_Texture(main_renderer, tmpture, (Vector2D){10, INIT_HEIGHT - 30});
         
+        sprintf(str, "Score: %07d", (int)score);
+        tmpture = Bake_Text_To_Texture(main_renderer, main_font, str, (SDL_Color){255, 255, 255, 255});
+        Render_Text_Texture(main_renderer, tmpture, (Vector2D){INIT_WIDTH - 185, INIT_HEIGHT - 30});
+        // ##############################################
+
         SDL_RenderPresent(main_renderer);
 
         // ################ For Consistent Frame Rate ################
@@ -211,7 +230,9 @@ int main(int argc, char **argv) {
         if(delta_time < DO_FRAME_DELTA) {
             SDL_Delay((int)((DO_FRAME_DELTA - delta_time + 0.0005) * 1000));
             delta_time = DO_FRAME_DELTA;
-            time_passed += delta_time;
+            if(!player_dead) {
+                time_passed += delta_time;
+            }
         }
         // ###########################################################
     }
@@ -227,10 +248,13 @@ int main(int argc, char **argv) {
 }
 
 void reset_Game() {
+    time_passed = 0;
+    score = 0;
+
     num_characters = 30;
     for(int i = 0; i < num_characters; i++) {
-        characters[i].entity_struct.pos.x = ((i * 25) % 400) - 200;
-        characters[i].entity_struct.pos.y = ((i * 30) % 400) - 200;
+        characters[i].entity_struct.pos.x = ((i * 25) % 400);
+        characters[i].entity_struct.pos.y = ((i * 30) % 400);
         characters[i].entity_struct.vel.x = 0;
         characters[i].entity_struct.vel.y = 0;
         characters[i].entity_struct.mass = 10;
